@@ -3,7 +3,7 @@
 
 // NOW: Generate before compilation based on list of desired keys. The
 // generator will have a list of all keys for any project and create the map and
-// CsmKeycode enum by referencing that.
+// Keycode enum by referencing that.
 typedef enum {
 	CSM_KC_NONE,
 	CSM_KC_ESCAPE,
@@ -14,6 +14,6 @@ typedef enum {
 	CSM_KC_A,
 	CSM_KC_S,
 	CSM_KC_D
-} CsmKeycode;
+} Keycode;
 
 #endif // csm_keycode_h_INCLUDED
