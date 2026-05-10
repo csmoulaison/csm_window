@@ -19,11 +19,11 @@ typedef struct {
 	Window window;
 	iv2 size;
 	KeycodeMapping keycode_map[CSM_KEYCODE_HASHMAP_SIZE];
+	bool viewport_updated;
 } WindowContext;
 
 typedef enum {
 	CSM_WINDOW_EVENT_NONE,
-	CSM_WINDOW_EVENT_VIEWPORT_UPDATE,
 	CSM_WINDOW_EVENT_KEYDOWN,
 	CSM_WINDOW_EVENT_KEYUP
 } WindowEventType;
@@ -38,6 +38,7 @@ typedef struct {
 
 void window_init_context(WindowContext* ctx, char* window_name);
 WindowEvent window_pull_event(WindowContext* window);
+i32 window_pull_all_events(WindowContext* ctx, StackAllocator* stack);
 void window_swap_buffers(WindowContext* ctx);
 void window_get_size(WindowContext* window, i32* width, i32* height);
 
@@ -187,7 +188,7 @@ WindowEvent window_pull_event(WindowContext* ctx) {
 			break;
 		case ConfigureNotify: {
 			window_get_size(ctx, &ctx->size.x, &ctx->size.y);
-			return (WindowEvent){ .type = CSM_WINDOW_EVENT_VIEWPORT_UPDATE, .viewport_size = ctx->size };
+			ctx->viewport_updated = true;
 		} break;
 		case KeyPress: {
 			u32 keysym = XLookupKeysym(&(event.xkey), 0);
@@ -217,6 +218,18 @@ WindowEvent window_pull_event(WindowContext* ctx) {
 		default: break;
 	}
 	return (WindowEvent){ .type = CSM_WINDOW_EVENT_NONE };
+}
+
+// Places events in the stack and returns the number of events pulled
+i32 window_pull_all_events(WindowContext* ctx, StackAllocator* stack) {
+	WindowEvent event;
+	i32 count;
+	while((event = window_pull_event(ctx)).type != CSM_WINDOW_EVENT_NONE) {
+		WindowEvent* event_ptr = (WindowEvent*)stack_alloc(stack, sizeof(WindowEvent));
+		*event_ptr = event;
+		count++;
+	}
+	return count;
 }
 
 void window_swap_buffers(WindowContext* ctx) {

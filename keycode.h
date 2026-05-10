@@ -13,7 +13,13 @@ typedef enum {
 	CSM_KC_W,
 	CSM_KC_A,
 	CSM_KC_S,
-	CSM_KC_D
+	CSM_KC_D,
+	CSM_KC_Q,
+	CSM_KC_E,
+	CSM_KC_UP,
+	CSM_KC_LEFT,
+	CSM_KC_DOWN,
+	CSM_KC_RIGHT,
 } Keycode;
 
 #endif // csm_keycode_h_INCLUDED
