@@ -177,6 +177,7 @@ void window_init_context(WindowContext* ctx, char* window_name) {
 }
 
 WindowEvent window_pull_event(WindowContext* ctx) {
+retry:
 	if(!XPending(ctx->display)) {
 		return (WindowEvent){ .type = CSM_WINDOW_EVENT_NONE };
 	}
@@ -217,13 +218,13 @@ WindowEvent window_pull_event(WindowContext* ctx) {
 		} break;
 		default: break;
 	}
-	return (WindowEvent){ .type = CSM_WINDOW_EVENT_NONE };
+	goto retry;
 }
 
 // Places events in the stack and returns the number of events pulled
 i32 window_pull_all_events(WindowContext* ctx, StackAllocator* stack) {
 	WindowEvent event;
-	i32 count;
+	i32 count = 0;
 	while((event = window_pull_event(ctx)).type != CSM_WINDOW_EVENT_NONE) {
 		WindowEvent* event_ptr = (WindowEvent*)stack_alloc(stack, sizeof(WindowEvent));
 		*event_ptr = event;
