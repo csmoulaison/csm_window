@@ -5,21 +5,21 @@
 // generator will have a list of all keys for any project and create the map and
 // Keycode enum by referencing that.
 typedef enum {
-	CSM_KC_NONE,
-	CSM_KC_ESCAPE,
-	CSM_KC_SPACE,
-	CSM_KC_ENTER,
-	CSM_KC_TAB,
-	CSM_KC_W,
-	CSM_KC_A,
-	CSM_KC_S,
-	CSM_KC_D,
-	CSM_KC_Q,
-	CSM_KC_E,
-	CSM_KC_UP,
-	CSM_KC_LEFT,
-	CSM_KC_DOWN,
-	CSM_KC_RIGHT,
+	KEYCODE_NONE,
+	KEYCODE_ESCAPE,
+	KEYCODE_SPACE,
+	KEYCODE_ENTER,
+	KEYCODE_TAB,
+	KEYCODE_W,
+	KEYCODE_A,
+	KEYCODE_S,
+	KEYCODE_D,
+	KEYCODE_Q,
+	KEYCODE_E,
+	KEYCODE_UP,
+	KEYCODE_LEFT,
+	KEYCODE_DOWN,
+	KEYCODE_RIGHT,
 } Keycode;
 
 #endif // csm_keycode_h_INCLUDED

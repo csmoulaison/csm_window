@@ -7,7 +7,13 @@ typedef GLXContext(*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXCo
 #include "csm_core/core.h"
 #include "./keycode.h"
 
+#ifndef CSM_KEYCODE_HASHMAP_SIZE
 #define CSM_KEYCODE_HASHMAP_SIZE 1024
+#endif
+
+#ifndef WINDOW_DEBUG_MODE
+#define WINDOW_DEBUG_MODE true
+#endif
 
 typedef struct {
 	u32 key;
@@ -23,9 +29,9 @@ typedef struct {
 } WindowContext;
 
 typedef enum {
-	CSM_WINDOW_EVENT_NONE,
-	CSM_WINDOW_EVENT_KEYDOWN,
-	CSM_WINDOW_EVENT_KEYUP
+	WINDOW_EVENT_NONE,
+	WINDOW_EVENT_KEYDOWN,
+	WINDOW_EVENT_KEYUP
 } WindowEventType;
 
 typedef struct {
@@ -36,42 +42,91 @@ typedef struct {
 	};
 } WindowEvent;
 
-void window_init_context(WindowContext* ctx, char* window_name);
-WindowEvent window_pull_event(WindowContext* window);
-i32 window_pull_all_events(WindowContext* ctx, StackAllocator* stack);
-void window_swap_buffers(WindowContext* ctx);
-void window_get_size(WindowContext* window, i32* width, i32* height);
+void init_window_context(WindowContext* ctx, char* window_name);
+WindowEvent pull_window_event(WindowContext* window);
+i32 pull_all_window_events(WindowContext* ctx, Buffer* buffer);
+void swap_window_buffers(WindowContext* ctx);
+void window_size(WindowContext* window, i32* width, i32* height);
+void register_keycode_to_window(WindowContext* ctx, u32 keycode);
 
 #ifdef CSM_IMPLEMENTATION
 
-u32 keycode_hash(u32 key) {
+u32 csm_keycode_hash(u32 key) {
 	u32 h = key * UINT32_C(2654435761);
 	return h >> 22;
 }
 
-void keycode_map_add(KeycodeMapping* keycode_map, u32 xlib_keysym, u32 csm_keycode) {
-	u32 index = keycode_hash(xlib_keysym);
-	assert(index < CSM_KEYCODE_HASHMAP_SIZE);
-	while(keycode_map[index].value != CSM_KC_NONE && keycode_map[index].key != xlib_keysym) {
-		printf("csm_window: hashmap add collision! %u\n", index);
-		index = (index + 1) % CSM_KEYCODE_HASHMAP_SIZE;
-	}
-	keycode_map[index].key = xlib_keysym;
-	keycode_map[index].value = csm_keycode;
-}
-
-u32 keycode_map_lookup(KeycodeMapping* keycode_map, u32 xlib_keysym) {
-	u32 index = keycode_hash(xlib_keysym);
+u32 csm_keycode_map_lookup(KeycodeMapping* keycode_map, u32 xlib_keysym) {
+	u32 index = csm_keycode_hash(xlib_keysym);
 	while(keycode_map[index].key != xlib_keysym) {
-		if(keycode_map[index].value == CSM_KC_NONE) {
-			return CSM_KC_NONE;
+		if(keycode_map[index].value == KEYCODE_NONE) {
+			return KEYCODE_NONE;
 		}
 		index = (index + 1) % CSM_KEYCODE_HASHMAP_SIZE;
 	}
 	return keycode_map[index].value;
 }
 
-void window_init_context(WindowContext* ctx, char* window_name) {
+void register_keycode_to_window(WindowContext* ctx, u32 keycode) {
+    KeycodeMapping* keycode_map = ctx->keycode_map;
+    u32 xlib_keysym = 0;
+    switch(keycode) {
+        case KEYCODE_W: {
+            xlib_keysym = XK_w;
+        } break;
+    	case KEYCODE_A: {
+        	xlib_keysym = XK_a;
+    	} break;
+    	case KEYCODE_S: {
+        	xlib_keysym = XK_s;
+    	} break;
+    	case KEYCODE_D: {
+        	xlib_keysym = XK_d;
+    	} break;
+    	case KEYCODE_Q: {
+        	xlib_keysym = XK_q;
+    	} break;
+    	case KEYCODE_E: {
+        	xlib_keysym = XK_e;
+    	} break;
+    	case KEYCODE_UP: {
+        	xlib_keysym = XK_Up;
+    	} break;
+    	case KEYCODE_LEFT: {
+        	xlib_keysym = XK_Left;
+    	} break;
+    	case KEYCODE_DOWN: {
+        	xlib_keysym = XK_Down;
+    	} break;
+    	case KEYCODE_RIGHT: {
+        	xlib_keysym = XK_Right;
+    	} break;
+    	case KEYCODE_ESCAPE: {
+        	xlib_keysym = XK_Escape;
+    	} break;
+    	case KEYCODE_TAB: {
+        	xlib_keysym = XK_Tab;
+    	} break;
+    	case KEYCODE_SPACE: {
+        	xlib_keysym = XK_space;
+    	} break;
+    	case KEYCODE_ENTER: {
+        	xlib_keysym = XK_Return;
+    	} break;
+    	default: break;
+    }
+    
+	u32 index = csm_keycode_hash(xlib_keysym);
+	assert(index < CSM_KEYCODE_HASHMAP_SIZE);
+	while(keycode_map[index].value != KEYCODE_NONE && keycode_map[index].key != xlib_keysym) {
+		printf("csm_window: hashmap add collision! %u\n", index);
+		index = (index + 1) % CSM_KEYCODE_HASHMAP_SIZE;
+	}
+	keycode_map[index].key = xlib_keysym;
+	keycode_map[index].value = keycode;
+}
+
+void init_window_context(WindowContext* ctx, char* window_name) {
 	ctx->display = XOpenDisplay("");
 	assert(ctx->display != NULL);
 
@@ -176,10 +231,10 @@ void window_init_context(WindowContext* ctx, char* window_name) {
 	glXMakeCurrent(ctx->display, ctx->window, glx);
 }
 
-WindowEvent window_pull_event(WindowContext* ctx) {
+WindowEvent pull_window_event(WindowContext* ctx) {
 retry:
 	if(!XPending(ctx->display)) {
-		return (WindowEvent){ .type = CSM_WINDOW_EVENT_NONE };
+		return (WindowEvent){ .type = WINDOW_EVENT_NONE };
 	}
 
 	XEvent event;
@@ -188,13 +243,13 @@ retry:
 		case Expose:
 			break;
 		case ConfigureNotify: {
-			window_get_size(ctx, &ctx->size.x, &ctx->size.y);
+			window_size(ctx, &ctx->size.x, &ctx->size.y);
 			ctx->viewport_updated = true;
 		} break;
 		case KeyPress: {
 			u32 keysym = XLookupKeysym(&(event.xkey), 0);
-			u32 keycode = keycode_map_lookup(ctx->keycode_map, keysym);
-			return (WindowEvent){ .type = CSM_WINDOW_EVENT_KEYDOWN, .keycode = keycode };
+			u32 keycode = csm_keycode_map_lookup(ctx->keycode_map, keysym);
+			return (WindowEvent){ .type = WINDOW_EVENT_KEYDOWN, .keycode = keycode };
 		} break;
 		case KeyRelease: {
 			// X11 natively repeats key events when the key is held down. We could turn
@@ -212,8 +267,8 @@ retry:
             }
 			if(!is_repeat_key) {
 				u64 keysym = XLookupKeysym(&(event.xkey), 0);
-				u32 keycode = keycode_map_lookup(ctx->keycode_map, keysym);
-				return (WindowEvent){ .type = CSM_WINDOW_EVENT_KEYUP, .keycode = keycode };
+				u32 keycode = csm_keycode_map_lookup(ctx->keycode_map, keysym);
+				return (WindowEvent){ .type = WINDOW_EVENT_KEYUP, .keycode = keycode };
 			}
 		} break;
 		default: break;
@@ -222,22 +277,27 @@ retry:
 }
 
 // Places events in the stack and returns the number of events pulled
-i32 window_pull_all_events(WindowContext* ctx, StackAllocator* stack) {
+i32 pull_all_window_events(WindowContext* ctx, Buffer* buffer) {
 	WindowEvent event;
 	i32 count = 0;
-	while((event = window_pull_event(ctx)).type != CSM_WINDOW_EVENT_NONE) {
-		WindowEvent* event_ptr = (WindowEvent*)stack_alloc(stack, sizeof(WindowEvent));
-		*event_ptr = event;
+	while((event = pull_window_event(ctx)).type != WINDOW_EVENT_NONE) {
+    	WindowEvent* ptr = (WindowEvent*)&buffer->memory[count * sizeof(WindowEvent)];
+    	*ptr = event;
 		count++;
 	}
+#if WINDOW_DEBUG_MODE
+    if(count * sizeof(WindowEvent) > buffer->size) {
+        log_fail("pull_all_window_events: buffer too small!");
+    }
+#endif
 	return count;
 }
 
-void window_swap_buffers(WindowContext* ctx) {
+void swap_window_buffers(WindowContext* ctx) {
 	glXSwapBuffers(ctx->display, ctx->window);
 }
 
-void window_get_size(WindowContext* ctx, i32* width, i32* height) {
+void window_size(WindowContext* ctx, i32* width, i32* height) {
 	XWindowAttributes window_attributes;
 	XGetWindowAttributes(ctx->display, ctx->window, &window_attributes);
 	*width = window_attributes.width;
