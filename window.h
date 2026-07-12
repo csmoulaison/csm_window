@@ -7,8 +7,8 @@ typedef GLXContext(*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXCo
 #include "csm_core/core.h"
 #include "./keycode.h"
 
-#ifndef CSM_KEYCODE_HASHMAP_SIZE
-#define CSM_KEYCODE_HASHMAP_SIZE 1024
+#ifndef WINDOW_KEYCODE_HASHMAP_SIZE
+#define WINDOW_KEYCODE_HASHMAP_SIZE 1024
 #endif
 
 #ifndef WINDOW_DEBUG_MODE
@@ -18,13 +18,13 @@ typedef GLXContext(*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXCo
 typedef struct {
 	u32 key;
 	u32 value;
-} KeycodeMapping;
+} WindowKeycodeMapping;
 
 typedef struct {
 	Display* display;
 	Window window;
 	iv2 size;
-	KeycodeMapping keycode_map[CSM_KEYCODE_HASHMAP_SIZE];
+	WindowKeycodeMapping keycode_map[WINDOW_KEYCODE_HASHMAP_SIZE];
 	bool viewport_updated;
 } WindowContext;
 
@@ -42,33 +42,33 @@ typedef struct {
 	};
 } WindowEvent;
 
-void init_window_context(WindowContext* ctx, char* window_name);
-WindowEvent pull_window_event(WindowContext* window);
-i32 pull_all_window_events(WindowContext* ctx, Buffer* buffer);
-void swap_window_buffers(WindowContext* ctx);
+void window_init_context(WindowContext* ctx, char* window_name);
+WindowEvent window_pull_event(WindowContext* window);
+i32 window_pull_all_events(WindowContext* ctx, Buffer* buffer);
+void window_swap_buffers(WindowContext* ctx);
 void window_size(WindowContext* window, i32* width, i32* height);
-void register_keycode_to_window(WindowContext* ctx, u32 keycode);
+void window_register_keycode(WindowContext* ctx, u32 keycode);
 
 #ifdef CSM_IMPLEMENTATION
 
-u32 csm_keycode_hash(u32 key) {
+u32 _window_keycode_hash(u32 key) {
 	u32 h = key * UINT32_C(2654435761);
 	return h >> 22;
 }
 
-u32 csm_keycode_map_lookup(KeycodeMapping* keycode_map, u32 xlib_keysym) {
-	u32 index = csm_keycode_hash(xlib_keysym);
+u32 _window_keycode_map_lookup(WindowKeycodeMapping* keycode_map, u32 xlib_keysym) {
+	u32 index = _window_keycode_hash(xlib_keysym);
 	while(keycode_map[index].key != xlib_keysym) {
 		if(keycode_map[index].value == KEYCODE_NONE) {
 			return KEYCODE_NONE;
 		}
-		index = (index + 1) % CSM_KEYCODE_HASHMAP_SIZE;
+		index = (index + 1) % WINDOW_KEYCODE_HASHMAP_SIZE;
 	}
 	return keycode_map[index].value;
 }
 
-void register_keycode_to_window(WindowContext* ctx, u32 keycode) {
-    KeycodeMapping* keycode_map = ctx->keycode_map;
+void window_register_keycode(WindowContext* ctx, u32 keycode) {
+    WindowKeycodeMapping* keycode_map = ctx->keycode_map;
     u32 xlib_keysym = 0;
     switch(keycode) {
         case KEYCODE_W: {
@@ -116,17 +116,17 @@ void register_keycode_to_window(WindowContext* ctx, u32 keycode) {
     	default: break;
     }
     
-	u32 index = csm_keycode_hash(xlib_keysym);
-	assert(index < CSM_KEYCODE_HASHMAP_SIZE);
+	u32 index = _window_keycode_hash(xlib_keysym);
+	assert(index < WINDOW_KEYCODE_HASHMAP_SIZE);
 	while(keycode_map[index].value != KEYCODE_NONE && keycode_map[index].key != xlib_keysym) {
 		printf("csm_window: hashmap add collision! %u\n", index);
-		index = (index + 1) % CSM_KEYCODE_HASHMAP_SIZE;
+		index = (index + 1) % WINDOW_KEYCODE_HASHMAP_SIZE;
 	}
 	keycode_map[index].key = xlib_keysym;
 	keycode_map[index].value = keycode;
 }
 
-void init_window_context(WindowContext* ctx, char* window_name) {
+void window_init_context(WindowContext* ctx, char* window_name) {
 	ctx->display = XOpenDisplay("");
 	assert(ctx->display != NULL);
 
@@ -231,7 +231,7 @@ void init_window_context(WindowContext* ctx, char* window_name) {
 	glXMakeCurrent(ctx->display, ctx->window, glx);
 }
 
-WindowEvent pull_window_event(WindowContext* ctx) {
+WindowEvent window_pull_event(WindowContext* ctx) {
 retry:
 	if(!XPending(ctx->display)) {
 		return (WindowEvent){ .type = WINDOW_EVENT_NONE };
@@ -248,7 +248,7 @@ retry:
 		} break;
 		case KeyPress: {
 			u32 keysym = XLookupKeysym(&(event.xkey), 0);
-			u32 keycode = csm_keycode_map_lookup(ctx->keycode_map, keysym);
+			u32 keycode = _window_keycode_map_lookup(ctx->keycode_map, keysym);
 			return (WindowEvent){ .type = WINDOW_EVENT_KEYDOWN, .keycode = keycode };
 		} break;
 		case KeyRelease: {
@@ -267,7 +267,7 @@ retry:
             }
 			if(!is_repeat_key) {
 				u64 keysym = XLookupKeysym(&(event.xkey), 0);
-				u32 keycode = csm_keycode_map_lookup(ctx->keycode_map, keysym);
+				u32 keycode = _window_keycode_map_lookup(ctx->keycode_map, keysym);
 				return (WindowEvent){ .type = WINDOW_EVENT_KEYUP, .keycode = keycode };
 			}
 		} break;
@@ -277,23 +277,23 @@ retry:
 }
 
 // Places events in the stack and returns the number of events pulled
-i32 pull_all_window_events(WindowContext* ctx, Buffer* buffer) {
+i32 window_pull_all_events(WindowContext* ctx, Buffer* buffer) {
 	WindowEvent event;
 	i32 count = 0;
-	while((event = pull_window_event(ctx)).type != WINDOW_EVENT_NONE) {
+	while((event = window_pull_event(ctx)).type != WINDOW_EVENT_NONE) {
     	WindowEvent* ptr = (WindowEvent*)&buffer->memory[count * sizeof(WindowEvent)];
     	*ptr = event;
 		count++;
 	}
 #if WINDOW_DEBUG_MODE
     if(count * sizeof(WindowEvent) > buffer->size) {
-        log_fail("pull_all_window_events: buffer too small!");
+        log_fail("window_pull_all_events: buffer too small!");
     }
 #endif
 	return count;
 }
 
-void swap_window_buffers(WindowContext* ctx) {
+void window_swap_buffers(WindowContext* ctx) {
 	glXSwapBuffers(ctx->display, ctx->window);
 }
 
